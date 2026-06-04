@@ -1,0 +1,15 @@
+{
+  "name": "c-address-onboarding-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend for the C-Address Onboarding Bridge protocol - route funds to Soroban smart accounts",
+  "workspaces": [
+    "api",
+    "sdk"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "root": true,
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "parser": "@typescript-eslint/parser",
+  "plugins": [],
+  "extends": [],
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "no-console": "off",
+    "prefer-const": "warn"
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "*.js"]
+}

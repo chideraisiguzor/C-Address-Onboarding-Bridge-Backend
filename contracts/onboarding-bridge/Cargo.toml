@@ -1,0 +1,26 @@
+[package]
+name = "onboarding-bridge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+testutils = ["soroban-sdk/testutils"]
+
+[dependencies]
+soroban-sdk = { version = "26.0.1" }
+
+[dev_dependencies]
+soroban-sdk = { version = "26.0.1", features = ["testutils"] }
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+lto = true
+panic = "abort"
+codegen-units = 1
