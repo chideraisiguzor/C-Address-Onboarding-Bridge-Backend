@@ -8,6 +8,7 @@ use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Sy
 pub enum DataKey {
     Admin,
     FeeBps,
+    MaxFeeBps,
     AccumulatedFees,
     Version,
     Paused,
@@ -18,21 +19,34 @@ pub struct OnboardingBridge;
 
 #[contractimpl]
 impl OnboardingBridge {
-    pub fn initialize(env: Env, admin: Address, fee_bps: u32) {
+    pub fn initialize(env: Env, admin: Address, fee_bps: u32, max_fee_bps: u32) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("already initialized");
         }
         admin.require_auth();
         assert!(fee_bps <= 10000, "fee_bps must be <= 10000");
+        assert!(
+            max_fee_bps <= 10000,
+            "max_fee_bps must be <= 10000"
+        );
+        assert!(
+            fee_bps <= max_fee_bps,
+            "fee_bps must be <= max_fee_bps"
+        );
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxFeeBps, &max_fee_bps);
         env.storage()
             .instance()
             .set(&DataKey::AccumulatedFees, &0i128);
         env.storage().instance().set(&DataKey::Version, &1u32);
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events()
-            .publish((Symbol::new(&env, "initialize"),), (admin, fee_bps));
+        env.events().publish(
+            (Symbol::new(&env, "initialize"),),
+            (admin, fee_bps, max_fee_bps),
+        );
     }
 
     pub fn version(env: Env) -> u32 {
@@ -48,6 +62,13 @@ impl OnboardingBridge {
 
     pub fn fee_bps(env: Env) -> u32 {
         env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0)
+    }
+
+    pub fn max_fee_bps(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::MaxFeeBps)
+            .unwrap_or(0)
     }
 
     pub fn accumulated_fees(env: Env) -> i128 {
@@ -95,7 +116,15 @@ impl OnboardingBridge {
             .get(&DataKey::Admin)
             .expect("not initialized");
         admin.require_auth();
-        assert!(new_fee_bps <= 10000, "fee_bps must be <= 10000");
+        let max_fee: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxFeeBps)
+            .expect("not initialized");
+        assert!(
+            new_fee_bps <= max_fee,
+            "fee_bps exceeds max_fee_bps"
+        );
         env.storage().instance().set(&DataKey::FeeBps, &new_fee_bps);
         env.events()
             .publish((Symbol::new(&env, "set_fee"),), (new_fee_bps,));

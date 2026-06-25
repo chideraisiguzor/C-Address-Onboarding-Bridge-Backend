@@ -98,7 +98,7 @@ fn test_fund_c_address_zero_amount() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     let memo = String::from_str(&env, "test");
     bridge.fund_c_address(&source, &target, &token_addr, &0, &memo);
 }
@@ -111,7 +111,7 @@ fn test_fund_c_address_negative_amount() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     let memo = String::from_str(&env, "test");
     bridge.fund_c_address(&source, &target, &token_addr, &-1, &memo);
 }
@@ -124,9 +124,65 @@ fn test_route_from_exchange_zero_amount() {
     let exchange = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     let memo = String::from_str(&env, "test");
     bridge.route_from_exchange(&exchange, &target, &token_addr, &0, &memo);
+}
+
+// ---------------------------------------------------------------------------
+// Fee capping tests
+// ---------------------------------------------------------------------------
+
+#[test]
+#[should_panic(expected = "max_fee_bps must be <= 10000")]
+fn test_initialize_validates_max_fee_bps() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &50, &10001);
+}
+
+#[test]
+#[should_panic(expected = "fee_bps must be <= max_fee_bps")]
+fn test_initialize_validates_fee_vs_max_fee() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &2000, &1000);
+}
+
+#[test]
+fn test_max_fee_bps_immutable_after_init() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &50, &1000);
+    assert_eq!(bridge.max_fee_bps(), 1000);
+    assert_eq!(bridge.fee_bps(), 50);
+}
+
+#[test]
+#[should_panic(expected = "fee_bps exceeds max_fee_bps")]
+fn test_set_fee_rejects_above_max() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &50, &500);
+    bridge.set_fee(&600);
+}
+
+#[test]
+fn test_set_fee_accepts_at_max() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &50, &500);
+    bridge.set_fee(&500);
+    assert_eq!(bridge.fee_bps(), 500);
+}
+
+#[test]
+fn test_set_fee_accepts_below_max() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &50, &1000);
+    bridge.set_fee(&100);
+    assert_eq!(bridge.fee_bps(), 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +193,7 @@ fn test_route_from_exchange_zero_amount() {
 fn test_is_paused_initial_state() {
     let (env, bridge) = setup_env();
     let admin = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     assert!(!bridge.is_paused());
 }
 
@@ -145,7 +201,7 @@ fn test_is_paused_initial_state() {
 fn test_pause_unpause() {
     let (env, bridge) = setup_env();
     let admin = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
 
     bridge.pause();
     assert!(bridge.is_paused());
@@ -162,7 +218,7 @@ fn test_fund_c_address_blocked_when_paused() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     bridge.pause();
 
     let memo = String::from_str(&env, "test");
@@ -177,7 +233,7 @@ fn test_route_from_exchange_blocked_when_paused() {
     let exchange = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     bridge.pause();
 
     let memo = String::from_str(&env, "test");
@@ -191,7 +247,7 @@ fn test_withdraw_fees_works_when_paused() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     let memo = String::from_str(&env, "test");
 
     bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
@@ -211,10 +267,11 @@ fn test_withdraw_fees_works_when_paused() {
 fn test_initialize() {
     let (env, bridge) = setup_env();
     let admin = Address::generate(&env);
-    bridge.initialize(&admin, &30);
+    bridge.initialize(&admin, &30, &1000);
     assert_eq!(bridge.admin(), admin);
     assert_eq!(bridge.fee_bps(), 30);
     assert_eq!(bridge.version(), 1);
+    assert_eq!(bridge.max_fee_bps(), 1000);
 }
 
 #[test]
@@ -222,15 +279,15 @@ fn test_initialize() {
 fn test_double_initialize() {
     let (env, bridge) = setup_env();
     let admin = Address::generate(&env);
-    bridge.initialize(&admin, &30);
-    bridge.initialize(&admin, &50);
+    bridge.initialize(&admin, &30, &1000);
+    bridge.initialize(&admin, &50, &1000);
 }
 
 #[test]
 fn test_set_fee() {
     let (env, bridge) = setup_env();
     let admin = Address::generate(&env);
-    bridge.initialize(&admin, &30);
+    bridge.initialize(&admin, &30, &1000);
     assert_eq!(bridge.fee_bps(), 30);
     bridge.set_fee(&50);
     assert_eq!(bridge.fee_bps(), 50);
@@ -240,20 +297,28 @@ fn test_set_fee() {
 fn test_initial_state() {
     let (env, bridge) = setup_env();
     let admin = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
     assert_eq!(bridge.accumulated_fees(), 0);
     assert_eq!(bridge.version(), 1);
+    assert_eq!(bridge.max_fee_bps(), 1000);
 }
 
 #[test]
-fn test_set_fee_validation() {
+fn test_set_fee_zero() {
     let (env, bridge) = setup_env();
     let admin = Address::generate(&env);
-    bridge.initialize(&admin, &30);
+    bridge.initialize(&admin, &30, &1000);
     bridge.set_fee(&0);
     assert_eq!(bridge.fee_bps(), 0);
-    bridge.set_fee(&10000);
-    assert_eq!(bridge.fee_bps(), 10000);
+}
+
+#[test]
+fn test_set_fee_max_allowed() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &30, &1000);
+    bridge.set_fee(&1000);
+    assert_eq!(bridge.fee_bps(), 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +332,7 @@ fn test_fund_c_address_tracks_fees() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
 
     let memo = String::from_str(&env, "fund test");
     let fee = bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
@@ -283,7 +348,7 @@ fn test_fund_with_zero_fee() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &0);
+    bridge.initialize(&admin, &0, &1000);
 
     let memo = String::from_str(&env, "no fee");
     let fee = bridge.fund_c_address(&source, &target, &token_addr, &500, &memo);
@@ -299,7 +364,7 @@ fn test_withdraw_fees() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &200);
+    bridge.initialize(&admin, &200, &1000);
 
     let memo = String::from_str(&env, "test");
     bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
@@ -317,7 +382,7 @@ fn test_withdraw_fees_partial() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
 
     let memo = String::from_str(&env, "test");
     bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
@@ -336,7 +401,7 @@ fn test_withdraw_fees_excessive() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
 
     let memo = String::from_str(&env, "test");
     bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
@@ -351,7 +416,7 @@ fn test_route_from_exchange() {
     let exchange = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &50);
+    bridge.initialize(&admin, &50, &1000);
 
     let memo = String::from_str(&env, "cex test");
     let fee = bridge.route_from_exchange(&exchange, &target, &token_addr, &500, &memo);
@@ -367,7 +432,7 @@ fn test_multiple_fund_accumulates_fees() {
     let source = Address::generate(&env);
     let target = Address::generate(&env);
     let token_addr = Address::generate(&env);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
 
     let memo = String::from_str(&env, "tx1");
     bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
@@ -445,14 +510,13 @@ fn test_full_scenario() {
 
     let bridge_id = env.register_contract(None, OnboardingBridge);
     let bridge = OnboardingBridgeClient::new(&env, &bridge_id);
-    bridge.initialize(&admin, &100);
+    bridge.initialize(&admin, &100, &1000);
 
     let memo = String::from_str(&env, "full test");
     let fee = bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
     assert_eq!(fee, 10);
     assert_eq!(bridge.accumulated_fees(), 10);
 
-    // Pause and verify withdraw still works
     bridge.pause();
     assert!(bridge.is_paused());
 

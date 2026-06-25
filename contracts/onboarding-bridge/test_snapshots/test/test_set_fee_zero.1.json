@@ -31,7 +31,6 @@
         }
       ]
     ],
-    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
@@ -42,7 +41,7 @@
               "function_name": "set_fee",
               "args": [
                 {
-                  "u32": 50
+                  "u32": 0
                 }
               ]
             }
@@ -111,7 +110,7 @@
                         ]
                       },
                       "val": {
-                        "u32": 50
+                        "u32": 0
                       }
                     },
                     {
