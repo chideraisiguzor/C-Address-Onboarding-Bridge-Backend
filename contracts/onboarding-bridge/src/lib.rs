@@ -154,7 +154,14 @@ fn rebate_bps(env: &Env, user: &Address) -> u32 {
 
 #[contractimpl]
 impl OnboardingBridge {
-    pub fn initialize(env: Env, admin: Address, fee_bps: u32, timelock_delay: u64, min_amount: i128, max_amount: i128) {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        fee_bps: u32,
+        timelock_delay: u64,
+        min_amount: i128,
+        max_amount: i128,
+    ) {
         assert!(
             !env.storage().instance().has(&DataKey::Admin),
             "already initialized"
@@ -168,8 +175,12 @@ impl OnboardingBridge {
         env.storage()
             .instance()
             .set(&DataKey::TimelockDelay, &timelock_delay);
-        env.storage().instance().set(&DataKey::MinAmount, &min_amount);
-        env.storage().instance().set(&DataKey::MaxAmount, &max_amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::MinAmount, &min_amount);
+        env.storage()
+            .instance()
+            .set(&DataKey::MaxAmount, &max_amount);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::TierCount, &0u32);
         env.storage().instance().set(&DataKey::Version, &2u32);
@@ -216,11 +227,17 @@ impl OnboardingBridge {
     }
 
     pub fn min_amount(env: Env) -> i128 {
-        env.storage().instance().get(&DataKey::MinAmount).unwrap_or(1)
+        env.storage()
+            .instance()
+            .get(&DataKey::MinAmount)
+            .unwrap_or(1)
     }
 
     pub fn max_amount(env: Env) -> i128 {
-        env.storage().instance().get(&DataKey::MaxAmount).unwrap_or(i128::MAX)
+        env.storage()
+            .instance()
+            .get(&DataKey::MaxAmount)
+            .unwrap_or(i128::MAX)
     }
 
     pub fn user_volume(env: Env, user: Address) -> i128 {
@@ -331,10 +348,15 @@ impl OnboardingBridge {
         require_admin(&env);
         assert!(min >= 1, "min_amount >= 1");
         assert_op_ready(&env, op_label.to_string().as_str());
-        let max: i128 = env.storage().instance().get(&DataKey::MaxAmount).unwrap_or(i128::MAX);
+        let max: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxAmount)
+            .unwrap_or(i128::MAX);
         assert!(min <= max, "min_amount <= max_amount");
         env.storage().instance().set(&DataKey::MinAmount, &min);
-        env.events().publish((Symbol::new(&env, "min_amount_set"),), (min,));
+        env.events()
+            .publish((Symbol::new(&env, "min_amount_set"),), (min,));
     }
 
     pub fn propose_set_max(env: Env, op_label: String) -> (BytesN<32>, u64) {
@@ -347,10 +369,15 @@ impl OnboardingBridge {
         require_admin(&env);
         assert!(max >= 1, "max_amount >= 1");
         assert_op_ready(&env, op_label.to_string().as_str());
-        let min: i128 = env.storage().instance().get(&DataKey::MinAmount).unwrap_or(1);
+        let min: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MinAmount)
+            .unwrap_or(1);
         assert!(max >= min, "max_amount >= min_amount");
         env.storage().instance().set(&DataKey::MaxAmount, &max);
-        env.events().publish((Symbol::new(&env, "max_amount_set"),), (max,));
+        env.events()
+            .publish((Symbol::new(&env, "max_amount_set"),), (max,));
     }
 
     // -----------------------------------------------------------------------
@@ -398,8 +425,16 @@ impl OnboardingBridge {
         assert_not_paused(&env);
         source.require_auth();
 
-        let min: i128 = env.storage().instance().get(&DataKey::MinAmount).unwrap_or(1);
-        let max: i128 = env.storage().instance().get(&DataKey::MaxAmount).unwrap_or(i128::MAX);
+        let min: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MinAmount)
+            .unwrap_or(1);
+        let max: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MaxAmount)
+            .unwrap_or(i128::MAX);
         assert!(amount >= min, "amount below minimum");
         assert!(amount <= max, "amount above maximum");
 

@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, testutils::Address as _, testutils::Ledger as _,
-    Address, Env, String,
+    contract, contractimpl, contracttype, testutils::Address as _, testutils::Ledger as _, Address,
+    Env, String,
 };
 
 use super::*;
@@ -37,9 +37,7 @@ impl TestToken {
         env.storage()
             .persistent()
             .set(&TK::Bal(from), &(fb - amount));
-        env.storage()
-            .persistent()
-            .set(&TK::Bal(to), &(tb + amount));
+        env.storage().persistent().set(&TK::Bal(to), &(tb + amount));
     }
 
     pub fn balance(env: Env, id: Address) -> i128 {
@@ -58,10 +56,18 @@ impl TestToken {
         env.storage().persistent().set(&TK::Bal(to), &(b + amount));
     }
 
-    pub fn decimals(_env: Env) -> u32 { 7 }
-    pub fn name(env: Env) -> String { String::from_str(&env, "TestToken") }
-    pub fn symbol(env: Env) -> String { String::from_str(&env, "TEST") }
-    pub fn allowance(_env: Env, _from: Address, _spender: Address) -> i128 { i128::MAX }
+    pub fn decimals(_env: Env) -> u32 {
+        7
+    }
+    pub fn name(env: Env) -> String {
+        String::from_str(&env, "TestToken")
+    }
+    pub fn symbol(env: Env) -> String {
+        String::from_str(&env, "TEST")
+    }
+    pub fn allowance(_env: Env, _from: Address, _spender: Address) -> i128 {
+        i128::MAX
+    }
     pub fn approve(_env: Env, _from: Address, _spender: Address, _amount: i128, _exp: u32) {}
 }
 
@@ -89,7 +95,12 @@ fn setup_full(fee_bps: u32, delay: u64, min: i128, max: i128) -> S {
     let token = TestTokenClient::new(&env, &token_id);
     let admin = Address::generate(&env);
     bridge.initialize(&admin, &fee_bps, &delay, &min, &max);
-    S { env, bridge, token, admin }
+    S {
+        env,
+        bridge,
+        token,
+        admin,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +120,8 @@ fn test_initialize() {
 #[should_panic(expected = "already initialized")]
 fn test_double_initialize() {
     let s = setup(30, 0);
-    s.bridge.initialize(&Address::generate(&s.env), &50, &0, &1, &i128::MAX);
+    s.bridge
+        .initialize(&Address::generate(&s.env), &50, &0, &1, &i128::MAX);
 }
 
 #[test]
@@ -135,7 +147,9 @@ fn test_execute_after_delay() {
     let s = setup(30, 100);
     let label = String::from_str(&s.env, "fee_op");
     s.bridge.propose_set_fee(&label);
-    s.env.ledger().set_timestamp(s.env.ledger().timestamp() + 200);
+    s.env
+        .ledger()
+        .set_timestamp(s.env.ledger().timestamp() + 200);
     s.bridge.execute_set_fee(&50, &label);
     assert_eq!(s.bridge.fee_bps(), 50);
 }
@@ -161,7 +175,10 @@ fn test_fund_transfers_tokens_and_tracks_fees() {
     s.token.mint(&source, &1000);
 
     let fee = s.bridge.fund_c_address(
-        &source, &target, &s.token.address, &1000,
+        &source,
+        &target,
+        &s.token.address,
+        &1000,
         &String::from_str(&s.env, "test"),
     );
     assert_eq!(fee, 10);
@@ -177,7 +194,10 @@ fn test_fund_zero_fee() {
     let target = Address::generate(&s.env);
     s.token.mint(&source, &500);
     let fee = s.bridge.fund_c_address(
-        &source, &target, &s.token.address, &500,
+        &source,
+        &target,
+        &s.token.address,
+        &500,
         &String::from_str(&s.env, "no fee"),
     );
     assert_eq!(fee, 0);
@@ -192,7 +212,10 @@ fn test_withdraw_all_fees() {
     let target = Address::generate(&s.env);
     s.token.mint(&source, &1000);
     s.bridge.fund_c_address(
-        &source, &target, &s.token.address, &1000,
+        &source,
+        &target,
+        &s.token.address,
+        &1000,
         &String::from_str(&s.env, "test"),
     );
     assert_eq!(s.bridge.accumulated_fees(&s.token.address), 20);
@@ -210,7 +233,10 @@ fn test_withdraw_partial_fees() {
     let target = Address::generate(&s.env);
     s.token.mint(&source, &1000);
     s.bridge.fund_c_address(
-        &source, &target, &s.token.address, &1000,
+        &source,
+        &target,
+        &s.token.address,
+        &1000,
         &String::from_str(&s.env, "test"),
     );
     let withdrawn = s.bridge.withdraw_fees(&s.admin, &s.token.address, &4);
@@ -226,7 +252,10 @@ fn test_withdraw_excess() {
     let target = Address::generate(&s.env);
     s.token.mint(&source, &1000);
     s.bridge.fund_c_address(
-        &source, &target, &s.token.address, &1000,
+        &source,
+        &target,
+        &s.token.address,
+        &1000,
         &String::from_str(&s.env, "test"),
     );
     s.bridge.withdraw_fees(&s.admin, &s.token.address, &999);
@@ -239,7 +268,10 @@ fn test_route_from_exchange() {
     let target = Address::generate(&s.env);
     s.token.mint(&exchange, &500);
     let fee = s.bridge.route_from_exchange(
-        &exchange, &target, &s.token.address, &500,
+        &exchange,
+        &target,
+        &s.token.address,
+        &500,
         &String::from_str(&s.env, "cex"),
     );
     assert_eq!(fee, 2);
@@ -253,9 +285,12 @@ fn test_multiple_fund_accumulates_fees() {
     let target = Address::generate(&s.env);
     s.token.mint(&source, &6000);
     let m = |l: &str| String::from_str(&s.env, l);
-    s.bridge.fund_c_address(&source, &target, &s.token.address, &1000, &m("t1"));
-    s.bridge.fund_c_address(&source, &target, &s.token.address, &2000, &m("t2"));
-    s.bridge.fund_c_address(&source, &target, &s.token.address, &3000, &m("t3"));
+    s.bridge
+        .fund_c_address(&source, &target, &s.token.address, &1000, &m("t1"));
+    s.bridge
+        .fund_c_address(&source, &target, &s.token.address, &2000, &m("t2"));
+    s.bridge
+        .fund_c_address(&source, &target, &s.token.address, &3000, &m("t3"));
     assert_eq!(s.bridge.accumulated_fees(&s.token.address), 60);
 }
 
@@ -268,7 +303,10 @@ fn test_fund_while_paused() {
     s.token.mint(&source, &1000);
     s.bridge.pause();
     s.bridge.fund_c_address(
-        &source, &target, &s.token.address, &500,
+        &source,
+        &target,
+        &s.token.address,
+        &500,
         &String::from_str(&s.env, "test"),
     );
 }
@@ -291,7 +329,13 @@ fn test_below_min() {
     let source = Address::generate(&s.env);
     let target = Address::generate(&s.env);
     s.token.mint(&source, &50);
-    s.bridge.fund_c_address(&source, &target, &s.token.address, &50, &String::from_str(&s.env, "t"));
+    s.bridge.fund_c_address(
+        &source,
+        &target,
+        &s.token.address,
+        &50,
+        &String::from_str(&s.env, "t"),
+    );
 }
 
 #[test]
@@ -301,7 +345,13 @@ fn test_above_max() {
     let source = Address::generate(&s.env);
     let target = Address::generate(&s.env);
     s.token.mint(&source, &200);
-    s.bridge.fund_c_address(&source, &target, &s.token.address, &200, &String::from_str(&s.env, "t"));
+    s.bridge.fund_c_address(
+        &source,
+        &target,
+        &s.token.address,
+        &200,
+        &String::from_str(&s.env, "t"),
+    );
 }
 
 #[test]
@@ -311,8 +361,10 @@ fn test_at_min_and_max_bounds() {
     let target = Address::generate(&s.env);
     s.token.mint(&source, &1100);
     let m = |l: &str| String::from_str(&s.env, l);
-    s.bridge.fund_c_address(&source, &target, &s.token.address, &100, &m("min"));
-    s.bridge.fund_c_address(&source, &target, &s.token.address, &1000, &m("max"));
+    s.bridge
+        .fund_c_address(&source, &target, &s.token.address, &100, &m("min"));
+    s.bridge
+        .fund_c_address(&source, &target, &s.token.address, &1000, &m("max"));
     assert_eq!(s.token.balance(&target), 1100);
 }
 
@@ -321,7 +373,9 @@ fn test_execute_set_min_after_timelock() {
     let s = setup_full(0, 100, 1, i128::MAX);
     let label = String::from_str(&s.env, "set_min");
     s.bridge.propose_set_min(&label);
-    s.env.ledger().set_timestamp(s.env.ledger().timestamp() + 200);
+    s.env
+        .ledger()
+        .set_timestamp(s.env.ledger().timestamp() + 200);
     s.bridge.execute_set_min(&50, &label);
     assert_eq!(s.bridge.min_amount(), 50);
 }
@@ -331,7 +385,9 @@ fn test_execute_set_max_after_timelock() {
     let s = setup_full(0, 100, 1, i128::MAX);
     let label = String::from_str(&s.env, "set_max");
     s.bridge.propose_set_max(&label);
-    s.env.ledger().set_timestamp(s.env.ledger().timestamp() + 200);
+    s.env
+        .ledger()
+        .set_timestamp(s.env.ledger().timestamp() + 200);
     s.bridge.execute_set_max(&5000, &label);
     assert_eq!(s.bridge.max_amount(), 5000);
 }
@@ -355,21 +411,37 @@ fn test_rebate_tiers() {
     let m = |l: &str| String::from_str(&s.env, l);
 
     // Tx1: 500, volume=0 → no rebate; fee = 500*1000/10000 = 50
-    assert_eq!(s.bridge.fund_c_address(&source, &target, &s.token.address, &500, &m("t1")), 50);
+    assert_eq!(
+        s.bridge
+            .fund_c_address(&source, &target, &s.token.address, &500, &m("t1")),
+        50
+    );
     assert_eq!(s.bridge.user_volume(&source), 500);
 
     // Tx2: 600, volume=500 → no tier; fee = 60
-    assert_eq!(s.bridge.fund_c_address(&source, &target, &s.token.address, &600, &m("t2")), 60);
+    assert_eq!(
+        s.bridge
+            .fund_c_address(&source, &target, &s.token.address, &600, &m("t2")),
+        60
+    );
     assert_eq!(s.bridge.user_volume(&source), 1100);
 
     // Tx3: 4000, volume=1100 → tier0 (10% discount)
     // effective_fee_bps = 1000 - 1000*1000/10000 = 900; fee = 4000*900/10000 = 360
-    assert_eq!(s.bridge.fund_c_address(&source, &target, &s.token.address, &4000, &m("t3")), 360);
+    assert_eq!(
+        s.bridge
+            .fund_c_address(&source, &target, &s.token.address, &4000, &m("t3")),
+        360
+    );
     assert_eq!(s.bridge.user_volume(&source), 5100);
 
     // Tx4: 1000, volume=5100 → tier1 (25% discount)
     // effective_fee_bps = 1000 - 1000*2500/10000 = 750; fee = 1000*750/10000 = 75
-    assert_eq!(s.bridge.fund_c_address(&source, &target, &s.token.address, &1000, &m("t4")), 75);
+    assert_eq!(
+        s.bridge
+            .fund_c_address(&source, &target, &s.token.address, &1000, &m("t4")),
+        75
+    );
 }
 
 #[test]
