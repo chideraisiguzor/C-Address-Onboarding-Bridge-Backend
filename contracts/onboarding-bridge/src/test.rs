@@ -549,12 +549,25 @@ fn test_initialize() {
 }
 
 #[test]
-#[should_panic(expected = "already initialized")]
-fn test_double_initialize() {
+fn test_double_initialize_is_noop() {
     let (env, bridge) = setup_env();
     let admins = create_admins(&env, 2);
     bridge.initialize(&admins, &2, &30, &1000);
     bridge.initialize(&admins, &2, &50, &1000);
+    assert_eq!(bridge.fee_bps(), 30);
+    let params = bridge.initialization_params();
+    assert_eq!(params.fee_bps, 30);
+    assert_eq!(params.threshold, 2);
+    assert_eq!(params.max_fee_bps, 1000);
+}
+
+#[test]
+#[should_panic(expected = "admin address cannot be the contract address")]
+fn test_initialize_rejects_contract_as_admin() {
+    let (env, bridge) = setup_env();
+    let mut admins = create_admins(&env, 1);
+    admins.set(0, bridge.contract_address());
+    bridge.initialize(&admins, &1, &30, &1000);
 }
 
 #[test]

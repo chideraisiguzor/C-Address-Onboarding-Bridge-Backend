@@ -14,6 +14,7 @@ const ERR_REENTRANT_CALL: &str = "reentrant call detected";
 const ERR_EMPTY_BATCH: &str = "batch inputs must not be empty";
 const ERR_MISMATCHED_LENGTHS: &str = "batch input vectors must have same length";
 const ERR_NO_ENTRIES_TO_ARCHIVE: &str = "no entries to archive";
+const ERR_ADMIN_CANNOT_BE_CONTRACT: &str = "admin address cannot be the contract address";
 
 #[contracttype]
 #[derive(Clone)]
@@ -24,6 +25,10 @@ pub enum DataKey {
     Version,
     Paused,
     Admins,
+    InitializationParams,
+    FeeTokenWhitelist(Address),
+    FeeTokenRate(Address),
+    AccumulatedFeesByToken(Address),
     Threshold,
     ProposalNonce,
     Proposal(u32),
@@ -52,9 +57,20 @@ pub struct FundingRecord {
 #[derive(Clone)]
 pub enum ProposalAction {
     SetFee(u32),
+    SetFeeTokenWhitelist(Address, bool),
+    SetFeeTokenRate(Address, u32),
     WithdrawFees(Address, Address, i128),
     Pause,
     Unpause,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct InitializationParams {
+    pub threshold: u32,
+    pub fee_bps: u32,
+    pub max_fee_bps: u32,
+    pub admin_count: u32,
 }
 
 #[contracttype]
@@ -82,6 +98,14 @@ impl OnboardingBridge {
     fn validate_c_address(target: &Address) {
         if !Self::is_contract_address(target) {
             panic!("{}", ERR_INVALID_C_ADDRESS);
+        }
+    }
+
+    fn validate_admins(env: &Env, admins: &Vec<Address>) {
+        let contract_address = env.current_contract_address();
+        for i in 0..admins.len() {
+            let admin = admins.get_unchecked(i);
+            assert!(admin != contract_address, "{}", ERR_ADMIN_CANNOT_BE_CONTRACT);
         }
     }
 
@@ -119,13 +143,14 @@ impl OnboardingBridge {
         max_fee_bps: u32,
     ) {
         if env.storage().instance().has(&DataKey::Version) {
-            panic!("already initialized");
+            return;
         }
         assert!(!admins.is_empty(), "admins must not be empty");
         assert!(threshold > 0, "threshold must be > 0");
         assert!(threshold <= admins.len(), "threshold exceeds admin count");
         assert!(max_fee_bps <= 10000, "max_fee_bps must be <= 10000");
         assert!(fee_bps <= max_fee_bps, "fee_bps must be <= max_fee_bps");
+        Self::validate_admins(&env, &admins);
 
         env.storage().instance().set(&DataKey::Admins, &admins);
         env.storage()
@@ -139,6 +164,15 @@ impl OnboardingBridge {
             .instance()
             .set(&DataKey::AccumulatedFees, &0i128);
         env.storage().instance().set(&DataKey::Version, &1u32);
+        env.storage().instance().set(
+            &DataKey::InitializationParams,
+            &InitializationParams {
+                threshold,
+                fee_bps,
+                max_fee_bps,
+                admin_count: admins.len(),
+            },
+        );
         env.storage().instance().set(&DataKey::FundingCount, &0u32);
         env.storage().instance().set(&DataKey::NextArchiveId, &0u32);
         env.storage().instance().set(&DataKey::Paused, &false);
@@ -155,9 +189,46 @@ impl OnboardingBridge {
         env.storage().instance().get(&DataKey::Version).unwrap_or(0)
     }
 
+    pub fn contract_address(env: Env) -> Address {
+        env.current_contract_address()
+    }
+
+    pub fn initialization_params(env: Env) -> InitializationParams {
+        env.storage()
+            .instance()
+            .get(&DataKey::InitializationParams)
+            .unwrap_or(InitializationParams {
+                threshold: 0,
+                fee_bps: 0,
+                max_fee_bps: 0,
+                admin_count: 0,
+            })
+    }
+
     pub fn fee_bps(env: Env) -> u32 {
         Self::extend_ttl(&env);
         env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0)
+    }
+
+    pub fn is_fee_token_whitelisted(env: Env, token_address: Address) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeTokenWhitelist(token_address))
+            .unwrap_or(false)
+    }
+
+    pub fn fee_token_rate(env: Env, token_address: Address) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::FeeTokenRate(token_address))
+            .unwrap_or(10000)
+    }
+
+    pub fn accumulated_fees_for_token(env: Env, token_address: Address) -> i128 {
+        env.storage()
+            .instance()
+            .get(&DataKey::AccumulatedFeesByToken(token_address))
+            .unwrap_or(0)
     }
 
     pub fn max_fee_bps(env: Env) -> u32 {
@@ -247,6 +318,20 @@ impl OnboardingBridge {
             env.storage()
                 .instance()
                 .set(&DataKey::AccumulatedFees, &(accumulated + fee));
+
+            if Self::is_fee_token_whitelisted(env.clone(), token_address.clone()) {
+                let token_fee_rate = Self::fee_token_rate(env.clone(), token_address.clone());
+                let token_fee = (fee * token_fee_rate as i128) / 10000;
+                let token_accumulated: i128 = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::AccumulatedFeesByToken(token_address.clone()))
+                    .unwrap_or(0);
+                env.storage().instance().set(
+                    &DataKey::AccumulatedFeesByToken(token_address.clone()),
+                    &(token_accumulated + token_fee),
+                );
+            }
         }
 
         let count: u32 = env
@@ -580,6 +665,26 @@ impl OnboardingBridge {
                 env.storage().instance().set(&DataKey::FeeBps, &new_fee_bps);
                 env.events()
                     .publish((Symbol::new(&env, "set_fee"),), (new_fee_bps,));
+                0i128
+            }
+            ProposalAction::SetFeeTokenWhitelist(token, enabled) => {
+                env.storage()
+                    .instance()
+                    .set(&DataKey::FeeTokenWhitelist(token.clone()), &enabled);
+                env.events().publish(
+                    (Symbol::new(&env, "set_fee_token_whitelist"),),
+                    (token, enabled),
+                );
+                0i128
+            }
+            ProposalAction::SetFeeTokenRate(token, rate) => {
+                assert!(rate >= 1000, "rate must be >= 1000");
+                assert!(rate <= 20000, "rate must be <= 20000");
+                env.storage().instance().set(&DataKey::FeeTokenRate(token.clone()), &rate);
+                env.events().publish(
+                    (Symbol::new(&env, "set_fee_token_rate"),),
+                    (token, rate),
+                );
                 0i128
             }
             ProposalAction::WithdrawFees(to, token, amount) => {
