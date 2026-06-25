@@ -10,6 +10,7 @@ pub enum DataKey {
     FeeBps,
     AccumulatedFees,
     Version,
+    Paused,
 }
 
 #[contract]
@@ -29,6 +30,7 @@ impl OnboardingBridge {
             .instance()
             .set(&DataKey::AccumulatedFees, &0i128);
         env.storage().instance().set(&DataKey::Version, &1u32);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.events()
             .publish((Symbol::new(&env, "initialize"),), (admin, fee_bps));
     }
@@ -55,6 +57,37 @@ impl OnboardingBridge {
             .unwrap_or(0)
     }
 
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
+    pub fn pause(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events()
+            .publish((Symbol::new(&env, "paused"),), ());
+    }
+
+    pub fn unpause(env: Env) {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("not initialized");
+        admin.require_auth();
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events()
+            .publish((Symbol::new(&env, "unpaused"),), ());
+    }
+
     pub fn set_fee(env: Env, new_fee_bps: u32) {
         let admin: Address = env
             .storage()
@@ -77,6 +110,9 @@ impl OnboardingBridge {
         _memo: String,
     ) -> i128 {
         assert!(amount > 0, "amount must be positive");
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            panic!("contract is paused");
+        }
         let fee_bps: u32 = env.storage().instance().get(&DataKey::FeeBps).unwrap_or(0);
         let fee_amount = if fee_bps > 0 {
             (amount * fee_bps as i128) / 10000
@@ -145,6 +181,9 @@ impl OnboardingBridge {
     ) -> i128 {
         exchange.require_auth();
         assert!(amount > 0, "amount must be positive");
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            panic!("contract is paused");
+        }
         Self::fund_c_address(env, exchange, target, token_address, amount, memo)
     }
 }

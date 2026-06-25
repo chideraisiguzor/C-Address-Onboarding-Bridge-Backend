@@ -8,7 +8,7 @@ use soroban_sdk::{
 use super::*;
 
 // ---------------------------------------------------------------------------
-// Test token — minimal SEP-41 compliant token.
+// Test token
 // ---------------------------------------------------------------------------
 
 #[contracttype]
@@ -127,6 +127,80 @@ fn test_route_from_exchange_zero_amount() {
     bridge.initialize(&admin, &100);
     let memo = String::from_str(&env, "test");
     bridge.route_from_exchange(&exchange, &target, &token_addr, &0, &memo);
+}
+
+// ---------------------------------------------------------------------------
+// Emergency pause tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_is_paused_initial_state() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &100);
+    assert!(!bridge.is_paused());
+}
+
+#[test]
+fn test_pause_unpause() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    bridge.initialize(&admin, &100);
+
+    bridge.pause();
+    assert!(bridge.is_paused());
+
+    bridge.unpause();
+    assert!(!bridge.is_paused());
+}
+
+#[test]
+#[should_panic(expected = "contract is paused")]
+fn test_fund_c_address_blocked_when_paused() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    let source = Address::generate(&env);
+    let target = Address::generate(&env);
+    let token_addr = Address::generate(&env);
+    bridge.initialize(&admin, &100);
+    bridge.pause();
+
+    let memo = String::from_str(&env, "test");
+    bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
+}
+
+#[test]
+#[should_panic(expected = "contract is paused")]
+fn test_route_from_exchange_blocked_when_paused() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    let exchange = Address::generate(&env);
+    let target = Address::generate(&env);
+    let token_addr = Address::generate(&env);
+    bridge.initialize(&admin, &100);
+    bridge.pause();
+
+    let memo = String::from_str(&env, "test");
+    bridge.route_from_exchange(&exchange, &target, &token_addr, &1000, &memo);
+}
+
+#[test]
+fn test_withdraw_fees_works_when_paused() {
+    let (env, bridge) = setup_env();
+    let admin = Address::generate(&env);
+    let source = Address::generate(&env);
+    let target = Address::generate(&env);
+    let token_addr = Address::generate(&env);
+    bridge.initialize(&admin, &100);
+    let memo = String::from_str(&env, "test");
+
+    bridge.fund_c_address(&source, &target, &token_addr, &1000, &memo);
+    assert_eq!(bridge.accumulated_fees(), 10);
+
+    bridge.pause();
+    let withdrawn = bridge.withdraw_fees(&admin, &token_addr, &0);
+    assert_eq!(withdrawn, 10);
+    assert_eq!(bridge.accumulated_fees(), 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -378,7 +452,14 @@ fn test_full_scenario() {
     assert_eq!(fee, 10);
     assert_eq!(bridge.accumulated_fees(), 10);
 
+    // Pause and verify withdraw still works
+    bridge.pause();
+    assert!(bridge.is_paused());
+
     let withdrawn = bridge.withdraw_fees(&admin, &token_addr, &0);
     assert_eq!(withdrawn, 10);
     assert_eq!(bridge.accumulated_fees(), 0);
+
+    bridge.unpause();
+    assert!(!bridge.is_paused());
 }
