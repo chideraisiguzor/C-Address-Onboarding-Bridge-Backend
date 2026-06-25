@@ -1,10 +1,11 @@
 {
   "generators": {
-    "address": 3,
+    "address": 7,
     "nonce": 0,
     "mux_id": 0
   },
   "auth": [
+    [],
     [],
     [],
     [
@@ -22,10 +23,16 @@
                 {
                   "vec": [
                     {
-                      "symbol": "SetFee"
+                      "symbol": "WithdrawFees"
                     },
                     {
-                      "u32": 500
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                    },
+                    {
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                    },
+                    {
+                      "i128": "999"
                     }
                   ]
                 },
@@ -61,7 +68,6 @@
         }
       ]
     ],
-    [],
     []
   ],
   "ledger": {
@@ -98,7 +104,7 @@
                         ]
                       },
                       "val": {
-                        "i128": "0"
+                        "i128": "10"
                       }
                     },
                     {
@@ -129,7 +135,7 @@
                         ]
                       },
                       "val": {
-                        "u32": 500
+                        "u32": 100
                       }
                     },
                     {
@@ -141,7 +147,7 @@
                         ]
                       },
                       "val": {
-                        "u32": 500
+                        "u32": 1000
                       }
                     },
                     {
@@ -176,10 +182,16 @@
                             "val": {
                               "vec": [
                                 {
-                                  "symbol": "SetFee"
+                                  "symbol": "WithdrawFees"
                                 },
                                 {
-                                  "u32": 500
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
+                                },
+                                {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                                },
+                                {
+                                  "i128": "999"
                                 }
                               ]
                             }
@@ -197,7 +209,7 @@
                               "symbol": "executed"
                             },
                             "val": {
-                              "bool": true
+                              "bool": false
                             }
                           },
                           {
